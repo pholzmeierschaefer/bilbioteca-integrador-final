@@ -4,6 +4,7 @@ const env = require('./config/env');
 const db = require('../models');
 const authRoutes = require('./auth/auth.routes');
 const livrosRoutes = require('./livros/livros.routes');
+const estudantesRoutes = require('./estudantes/estudantes.routes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
@@ -17,15 +18,15 @@ app.get('/', (req, res) => {
   res.status(200).json({
     sistema: 'Biblioteca HM — EEB Humberto Machado',
     status: 'online',
-    fase: 2,
+    fase: 3,
   });
 });
 
 // 3. Módulos de rotas por funcionalidade (Feature-based)
 app.use('/auth', authRoutes);
 app.use('/api/livros', livrosRoutes);
+app.use('/api/estudantes', estudantesRoutes);
 // Próximas fases:
-// app.use('/api/estudantes', estudantesRoutes); // Fase 3
 // app.use('/api/emprestimos', emprestimosRoutes); // Fase 4
 // app.use('/api/reservas', reservasRoutes);       // Fase 4
 
