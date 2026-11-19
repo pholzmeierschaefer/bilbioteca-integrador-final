@@ -3,6 +3,7 @@ const cors = require('cors');
 const env = require('./config/env');
 const db = require('../models');
 const authRoutes = require('./auth/auth.routes');
+const livrosRoutes = require('./livros/livros.routes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
@@ -16,17 +17,17 @@ app.get('/', (req, res) => {
   res.status(200).json({
     sistema: 'Biblioteca HM — EEB Humberto Machado',
     status: 'online',
-    fase: 1,
+    fase: 2,
   });
 });
 
 // 3. Módulos de rotas por funcionalidade (Feature-based)
 app.use('/auth', authRoutes);
+app.use('/api/livros', livrosRoutes);
 // Próximas fases:
-// app.use('/livros', livrosRoutes);       // Fase 2
-// app.use('/estudantes', estudantesRoutes); // Fase 3
-// app.use('/emprestimos', emprestimosRoutes); // Fase 4
-// app.use('/reservas', reservasRoutes);       // Fase 4
+// app.use('/api/estudantes', estudantesRoutes); // Fase 3
+// app.use('/api/emprestimos', emprestimosRoutes); // Fase 4
+// app.use('/api/reservas', reservasRoutes);       // Fase 4
 
 // 4. Catch-all para rotas inexistentes (404 padronizado)
 app.use((req, res) => {
