@@ -1,12 +1,13 @@
 {
-  "name": "backend",
+  "name": "biblioteca-hm-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Back-end do Sistema Biblioteca HM - EEB Humberto Machado",
+  "main": "src/main.js",
   "license": "MIT",
-  "scripts":{ 
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js" },
-    
+  "scripts": {
+    "start": "node src/main.js",
+    "dev": "nodemon src/main.js"
+  },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
