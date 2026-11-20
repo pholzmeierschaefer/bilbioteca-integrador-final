@@ -17,6 +17,11 @@ module.exports = (sequelize, DataTypes) => {
           notEmpty: { msg: 'O nome do usuário é obrigatório.' },
         },
       },
+      matricula: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+        unique: { msg: 'Esta matrícula de acesso já está cadastrada.' },
+      },
       email: {
         type: DataTypes.STRING(150),
         allowNull: false,

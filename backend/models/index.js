@@ -19,7 +19,11 @@ fs.readdirSync(__dirname)
   )
   .forEach((file) => {
     // 2. Cada model exporta uma função (sequelize, DataTypes) => Model
-    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
+    const definirModel = require(path.join(__dirname, file));
+    if (typeof definirModel !== 'function') {
+      return;
+    }
+    const model = definirModel(sequelize, Sequelize.DataTypes);
     db[model.name] = model;
   });
 

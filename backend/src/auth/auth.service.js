@@ -14,19 +14,34 @@ function criarErroHttp(statusCode, mensagem, codigo) {
   return err;
 }
 
+function mapearPerfilParaRole(perfil) {
+  if (!perfil) return null;
+  const valor = String(perfil).trim().toLowerCase();
+  if (valor === 'administrador' || valor === 'admin' || valor === 'bibliotecario') {
+    return 'bibliotecario';
+  }
+  if (valor === 'estudante' || valor === 'aluno') {
+    return 'aluno';
+  }
+  return null;
+}
+
 /**
- * Gera JWT contendo apenas o payload mínimo necessário (id, role, estudante_id).
+ * Gera JWT contendo apenas o payload mínimo necessário (id, role, estudante_id, matricula).
  */
 function gerarToken(usuario) {
   if (!env.jwtSecret) {
     throw criarErroHttp(500, 'JWT_SECRET não configurado nas variáveis de ambiente.');
   }
 
+  const matricula = usuario.matricula || usuario.estudante?.matricula || null;
+
   return jwt.sign(
     {
       id: usuario.id,
       role: usuario.role,
       estudante_id: usuario.estudante_id ?? null,
+      matricula,
     },
     env.jwtSecret,
     { algorithm: 'HS256', expiresIn: env.jwtExpiresIn }
@@ -45,22 +60,27 @@ async function registrar({ nome, email, senha, role, matricula, turma, telefone 
     throw criarErroHttp(409, 'E-mail já cadastrado.', 'EMAIL_DUPLICADO');
   }
 
+  const matriculaLimpa = matricula ? String(matricula).trim() : null;
+  if (matriculaLimpa) {
+    const usuarioComMatricula = await authRepository.buscarUsuarioPorMatricula(matriculaLimpa);
+    if (usuarioComMatricula) {
+      throw criarErroHttp(409, 'Matrícula já cadastrada.', 'MATRICULA_DUPLICADA');
+    }
+  }
+
   const totalBibliotecarios = await authRepository.contarUsuariosPorRole('bibliotecario');
   const papelFinal =
-    role === 'bibliotecario' && totalBibliotecarios === 0 ? 'bibliotecario' : 'aluno';
+    (role === 'bibliotecario' || role === 'administrador') && totalBibliotecarios === 0
+      ? 'bibliotecario'
+      : 'aluno';
 
   const senhaHash = await bcrypt.hash(senha, SALT_ROUNDS);
 
   const usuarioCriado = await authRepository.executarTransacao(async (transaction) => {
     let estudanteId = null;
 
-    // Se for estudante e informar matrícula, vincula ao aluno existente ou cria o registro
-    if (papelFinal === 'aluno' && matricula) {
-      const matriculaLimpa = String(matricula).trim();
-      let estudante = await authRepository.buscarEstudantePorMatricula(
-        matriculaLimpa,
-        transaction
-      );
+    if (papelFinal === 'aluno' && matriculaLimpa) {
+      let estudante = await authRepository.buscarEstudantePorMatricula(matriculaLimpa, transaction);
 
       if (!estudante && turma) {
         estudante = await authRepository.criarEstudante(
@@ -83,6 +103,7 @@ async function registrar({ nome, email, senha, role, matricula, turma, telefone 
     return authRepository.criarUsuario(
       {
         nome: String(nome).trim(),
+        matricula: matriculaLimpa,
         email: emailNormalizado,
         senha: senhaHash,
         role: papelFinal,
@@ -92,10 +113,10 @@ async function registrar({ nome, email, senha, role, matricula, turma, telefone 
     );
   });
 
-  // Nunca retorna o hash da senha
   return {
     id: usuarioCriado.id,
     nome: usuarioCriado.nome,
+    matricula: usuarioCriado.matricula,
     email: usuarioCriado.email,
     role: usuarioCriado.role,
     estudante_id: usuarioCriado.estudante_id,
@@ -103,26 +124,47 @@ async function registrar({ nome, email, senha, role, matricula, turma, telefone 
 }
 
 /**
- * Autentica credenciais e retorna o token JWT + dados públicos do usuário.
+ * Autentica por matrícula (ou e-mail) + senha e valida o perfil escolhido (administrador | estudante).
  */
-async function login({ email, senha }) {
-  const emailNormalizado = String(email).trim().toLowerCase();
-  const usuario = await authRepository.buscarUsuarioPorEmail(emailNormalizado);
+async function login({ matricula, email, senha, perfil }) {
+  const identificador = String(matricula || email || '').trim();
+  const roleEsperada = mapearPerfilParaRole(perfil);
+
+  if (perfil && !roleEsperada) {
+    throw criarErroHttp(
+      400,
+      'Perfil inválido. Escolha "administrador" ou "estudante".',
+      'PERFIL_INVALIDO'
+    );
+  }
+
+  const usuario = await authRepository.buscarUsuarioPorMatricula(identificador);
 
   // Executa bcrypt.compare mesmo se o usuário não existir (mitigação de timing attack)
   const senhaValida = await bcrypt.compare(senha, usuario?.senha ?? HASH_FICTICIO);
 
   if (!usuario || !senhaValida) {
-    throw criarErroHttp(401, 'Credenciais inválidas.', 'CREDENCIAIS_INVALIDAS');
+    throw criarErroHttp(401, 'Matrícula ou senha inválidos.', 'CREDENCIAIS_INVALIDAS');
+  }
+
+  if (roleEsperada && usuario.role !== roleEsperada) {
+    const labelPerfil = roleEsperada === 'bibliotecario' ? 'Administrador' : 'Estudante';
+    throw criarErroHttp(
+      403,
+      `Esta matrícula não pertence ao perfil ${labelPerfil}.`,
+      'PERFIL_INCOMPATIVEL'
+    );
   }
 
   const token = gerarToken(usuario);
+  const matriculaUsuario = usuario.matricula || usuario.estudante?.matricula || null;
 
   return {
     token,
     usuario: {
       id: usuario.id,
       nome: usuario.nome,
+      matricula: matriculaUsuario,
       email: usuario.email,
       role: usuario.role,
       estudante_id: usuario.estudante_id,

@@ -1,118 +1,64 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-let accessToken = null;
-let refreshPromise = null;
+const CHAVE_TOKEN = 'biblioteca_hm_token';
 
-export function getAccessToken() {
-  return accessToken;
+export function getToken() {
+  return sessionStorage.getItem(CHAVE_TOKEN);
 }
 
-export function setAccessToken(token) {
-  accessToken = token || null;
-}
-
-export function decodificarPayloadJwt(token) {
-  try {
-    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const json = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => `%${(`00${c.charCodeAt(0).toString(16)}`).slice(-2)}`)
-        .join('')
-    );
-    return JSON.parse(json);
-  } catch {
-    return null;
+export function setToken(token) {
+  if (token) {
+    sessionStorage.setItem(CHAVE_TOKEN, token);
+  } else {
+    sessionStorage.removeItem(CHAVE_TOKEN);
   }
 }
 
 /**
- * Tenta renovar o Access Token usando o cookie HttpOnly (/auth/refresh).
- * Garante apenas uma requisição de refresh simultânea (single-flight).
+ * Cliente HTTP padronizado com envio automático do token JWT (Bearer)
+ * e tratamento uniforme de erros da API ({ erro, detalhes }).
  */
-export async function renovarSessao() {
-  if (!refreshPromise) {
-    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          setAccessToken(null);
-          return null;
-        }
-        const dados = await res.json();
-        const novoToken = dados.accessToken || dados.token;
-        if (!novoToken) {
-          setAccessToken(null);
-          return null;
-        }
-        setAccessToken(novoToken);
-        return {
-          token: novoToken,
-          usuario: dados.usuario || decodificarPayloadJwt(novoToken),
-        };
-      })
-      .catch(() => {
-        setAccessToken(null);
-        return null;
-      })
-      .finally(() => {
-        refreshPromise = null;
-      });
-  }
-
-  return refreshPromise;
-}
-
 export async function apiRequest(caminho, opcoes = {}) {
-  const {
-    method = 'GET',
-    body,
-    headers = {},
-    autenticado = true,
-    _tentativaRefresh = false,
-  } = opcoes;
+  const { method = 'GET', body, headers = {}, autenticado = true } = opcoes;
 
   const requestHeaders = { ...headers };
-  if (body !== undefined && !(body instanceof FormData)) {
+  const ehTextoBruto = typeof body === 'string';
+
+  if (body !== undefined && !ehTextoBruto && !(body instanceof FormData)) {
     requestHeaders['Content-Type'] = 'application/json';
   }
-  if (autenticado && accessToken) {
-    requestHeaders.Authorization = `Bearer ${accessToken}`;
+
+  const token = getToken();
+  if (autenticado && token) {
+    requestHeaders.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${caminho}`, {
+  const resposta = await fetch(`${API_BASE_URL}${caminho}`, {
     method,
     headers: requestHeaders,
-    credentials: 'include',
-    body: body !== undefined && !(body instanceof FormData) ? JSON.stringify(body) : body,
+    body:
+      body !== undefined && !ehTextoBruto && !(body instanceof FormData)
+        ? JSON.stringify(body)
+        : body,
   });
 
-  if (response.status === 401 && autenticado && !_tentativaRefresh) {
-    const sessao = await renovarSessao();
-    if (sessao) {
-      return apiRequest(caminho, { ...opcoes, _tentativaRefresh: true });
-    }
-  }
-
-  if (response.status === 204) {
+  if (resposta.status === 204) {
     return null;
   }
 
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = resposta.headers.get('content-type') || '';
   const payload = contentType.includes('application/json')
-    ? await response.json()
-    : await response.text();
+    ? await resposta.json()
+    : await resposta.text();
 
-  if (!response.ok) {
+  if (!resposta.ok) {
     const mensagem =
       typeof payload === 'object' && payload !== null
         ? payload.erro || payload.message || 'Erro ao processar requisição.'
         : payload || 'Erro ao processar requisição.';
     const erro = new Error(mensagem);
-    erro.status = response.status;
+    erro.status = resposta.status;
     erro.detalhes = payload?.detalhes;
     throw erro;
   }
@@ -120,24 +66,28 @@ export async function apiRequest(caminho, opcoes = {}) {
   return payload;
 }
 
+/**
+ * Faz o download de relatórios CSV (RF12) autenticados via Bearer Token.
+ */
 export async function baixarCsv(caminho, nomeArquivo) {
-  const executar = () =>
-    fetch(`${API_BASE_URL}${caminho}`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    });
+  const token = getToken();
+  const resposta = await fetch(`${API_BASE_URL}${caminho}`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
 
-  let res = await executar();
-  if (res.status === 401 && (await renovarSessao())) {
-    res = await executar();
+  if (!resposta.ok) {
+    let mensagem = 'Não foi possível gerar o arquivo CSV.';
+    try {
+      const dados = await resposta.json();
+      if (dados?.erro) mensagem = dados.erro;
+    } catch {
+      // mantém mensagem padrão
+    }
+    throw new Error(mensagem);
   }
 
-  if (!res.ok) {
-    throw new Error('Não foi possível gerar o relatório CSV.');
-  }
-
-  const blob = await res.blob();
+  const blob = await resposta.blob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

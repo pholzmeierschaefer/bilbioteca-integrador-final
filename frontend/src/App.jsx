@@ -1,30 +1,30 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import ProtectedRoute from './components/ProtectedRoute';
-import HomePage from './pages/HomePage';
-import PainelBibliotecario from './pages/PainelBibliotecario';
+import RotaProtegida from './components/RotaProtegida';
+import LoginPage from './pages/LoginPage';
+import DashboardAdmin from './pages/DashboardAdmin';
 import PortalAluno from './pages/PortalAluno';
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<LoginPage />} />
       <Route
         path="/painel"
         element={
-          <ProtectedRoute rolesPermitidos={['bibliotecario']}>
-            <PainelBibliotecario />
-          </ProtectedRoute>
+          <RotaProtegida papeisPermitidos={['bibliotecario']}>
+            <DashboardAdmin />
+          </RotaProtegida>
         }
       />
       <Route
         path="/aluno"
         element={
-          <ProtectedRoute rolesPermitidos={['aluno']}>
+          <RotaProtegida papeisPermitidos={['aluno', 'bibliotecario']}>
             <PortalAluno />
-          </ProtectedRoute>
+          </RotaProtegida>
         }
       />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }

@@ -5,6 +5,9 @@ const db = require('../models');
 const authRoutes = require('./auth/auth.routes');
 const livrosRoutes = require('./livros/livros.routes');
 const estudantesRoutes = require('./estudantes/estudantes.routes');
+const reservasRoutes = require('./reservas/reservas.routes');
+const emprestimosRoutes = require('./emprestimos/emprestimos.routes');
+const relatoriosRoutes = require('./relatorios/relatorios.routes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
@@ -18,7 +21,7 @@ app.get('/', (req, res) => {
   res.status(200).json({
     sistema: 'Biblioteca HM — EEB Humberto Machado',
     status: 'online',
-    fase: 3,
+    fase: 5,
   });
 });
 
@@ -26,9 +29,9 @@ app.get('/', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/api/livros', livrosRoutes);
 app.use('/api/estudantes', estudantesRoutes);
-// Próximas fases:
-// app.use('/api/emprestimos', emprestimosRoutes); // Fase 4
-// app.use('/api/reservas', reservasRoutes);       // Fase 4
+app.use('/api/reservas', reservasRoutes);
+app.use('/api/emprestimos', emprestimosRoutes);
+app.use('/api/relatorios', relatoriosRoutes);
 
 // 4. Catch-all para rotas inexistentes (404 padronizado)
 app.use((req, res) => {
@@ -48,7 +51,7 @@ async function iniciar() {
     console.log('Conexão com o PostgreSQL estabelecida com sucesso.');
 
     if (env.nodeEnv === 'development') {
-      await db.sequelize.sync({ alter: true });
+      await db.sequelize.sync();
       console.log('Models sincronizados com o banco de dados (modo development).');
     }
 

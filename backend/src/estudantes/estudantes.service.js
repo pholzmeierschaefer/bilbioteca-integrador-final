@@ -285,6 +285,7 @@ async function cadastrarEstudante(dados) {
     await estudantesRepository.criarUsuario(
       {
         nome: nomeLimpo,
+        matricula: matriculaLimpa,
         email: emailFinal,
         senha: senhaHash,
         role: 'aluno',
@@ -323,6 +324,7 @@ async function editarEstudante(matriculaParam, dados) {
         );
       }
       camposEstudante.matricula = novaMatricula;
+      camposUsuario.matricula = novaMatricula;
     }
   }
 
@@ -404,6 +406,7 @@ async function editarEstudante(matriculaParam, dados) {
         await estudantesRepository.criarUsuario(
           {
             nome: camposUsuario.nome || estudante.nome_completo,
+            matricula: matriculaRef,
             email: camposUsuario.email || gerarEmailPadrao(matriculaRef),
             senha: senhaHash,
             role: 'aluno',
@@ -576,6 +579,7 @@ async function importarEstudantes({ csv, estudantes, atualizarExistentes = false
       await estudantesRepository.criarUsuario(
         {
           nome: nomeLimpo,
+          matricula: matriculaLimpa,
           email: emailFinal,
           senha: senhaHash,
           role: 'aluno',

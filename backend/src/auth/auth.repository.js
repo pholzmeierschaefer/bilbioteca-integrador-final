@@ -1,10 +1,43 @@
 const db = require('../../models');
 
+const { Op } = db.Sequelize;
+
 /**
  * Camada Repository de Auth: abstrai todo o acesso ao Sequelize (PostgreSQL).
  */
 async function buscarUsuarioPorEmail(email) {
-  return db.Usuario.findOne({ where: { email } });
+  return db.Usuario.findOne({ where: { email: String(email).trim().toLowerCase() } });
+}
+
+async function buscarUsuarioPorMatricula(matricula) {
+  const valor = String(matricula).trim();
+
+  // 1. Busca direta por matricula (ou email) na tabela usuarios
+  const direto = await db.Usuario.findOne({
+    where: {
+      [Op.or]: [
+        { matricula: { [Op.iLike]: valor } },
+        { email: { [Op.iLike]: valor } },
+      ],
+    },
+    include: [{ model: db.Estudante, as: 'estudante', required: false }],
+  });
+
+  if (direto) {
+    return direto;
+  }
+
+  // 2. Fallback: busca pelo cadastro de Estudante vinculado pela matrícula
+  return db.Usuario.findOne({
+    include: [
+      {
+        model: db.Estudante,
+        as: 'estudante',
+        where: { matricula: { [Op.iLike]: valor } },
+        required: true,
+      },
+    ],
+  });
 }
 
 async function buscarUsuarioPorIdSemSenha(id) {
@@ -36,6 +69,7 @@ function executarTransacao(callback) {
 
 module.exports = {
   buscarUsuarioPorEmail,
+  buscarUsuarioPorMatricula,
   buscarUsuarioPorIdSemSenha,
   contarUsuariosPorRole,
   criarUsuario,

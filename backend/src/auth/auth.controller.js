@@ -35,19 +35,20 @@ async function registrar(req, res) {
 }
 
 async function login(req, res) {
-  const { email, senha } = req.body;
+  const { matricula, email, senha, perfil } = req.body;
+  const identificador = matricula ?? email;
 
-  if (!email || !senha) {
+  if (!identificador || !senha) {
     return res.status(400).json({
-      erro: 'E-mail e senha são obrigatórios.',
+      erro: 'Matrícula e senha são obrigatórias.',
       detalhes: [
-        !email && { campo: 'email', mensagem: 'Obrigatório.' },
+        !identificador && { campo: 'matricula', mensagem: 'Obrigatória.' },
         !senha && { campo: 'senha', mensagem: 'Obrigatória.' },
       ].filter(Boolean),
     });
   }
 
-  const resultado = await authService.login({ email, senha });
+  const resultado = await authService.login({ matricula, email, senha, perfil });
   return res.status(200).json(resultado);
 }
 
