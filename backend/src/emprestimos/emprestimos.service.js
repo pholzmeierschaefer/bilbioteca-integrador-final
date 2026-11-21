@@ -773,6 +773,47 @@ async function excluirEmprestimo(emprestimoId) {
   });
 }
 
+async function listarJustificativas() {
+  const lista = await emprestimosRepository.listarJustificativas();
+  return lista.map((item) => ({
+    id: item.id,
+    emprestimo_id: item.emprestimo_id,
+    texto_descritivo: item.texto_descritivo,
+    data_envio: item.data_envio,
+    status: item.status,
+    estudante: item.estudante
+      ? {
+          id: item.estudante.id,
+          matricula: item.estudante.matricula,
+          nome: item.estudante.nome_completo,
+          turma: item.estudante.turma,
+          telefone: item.estudante.telefone,
+        }
+      : null,
+    livro: item.emprestimo?.exemplar?.obra
+      ? {
+          codigo: item.emprestimo.exemplar.obra.codigo_livro,
+          titulo: item.emprestimo.exemplar.obra.titulo,
+          exemplar_tombo: item.emprestimo.exemplar.codigo_exemplar,
+        }
+      : null,
+  }));
+}
+
+async function marcarJustificativaAnalisada(justificativaId) {
+  const justificativa = await emprestimosRepository.buscarJustificativaPorId(justificativaId);
+  if (!justificativa) {
+    throw criarErroHttp(404, 'Justificativa não encontrada.', 'JUSTIFICATIVA_NAO_ENCONTRADA');
+  }
+
+  await emprestimosRepository.atualizarJustificativa(justificativa, { status: 'analisada' });
+  return {
+    id: justificativa.id,
+    status: 'analisada',
+    mensagem: 'Justificativa marcada como analisada.',
+  };
+}
+
 module.exports = {
   PRAZO_PADRAO_DIAS,
   LIMITE_EMPRESTIMOS_SIMULTANEOS,
@@ -787,4 +828,6 @@ module.exports = {
   obterDashboard,
   listarMeusEmprestimos,
   enviarJustificativaAtraso,
+  listarJustificativas,
+  marcarJustificativaAnalisada,
 };

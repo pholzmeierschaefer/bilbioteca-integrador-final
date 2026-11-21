@@ -57,8 +57,24 @@ async function perfil(req, res) {
   return res.status(200).json(usuario);
 }
 
+async function alterarSenha(req, res) {
+  const senhaAtual = req.body.senha_atual ?? req.body.senhaAtual;
+  const novaSenha = req.body.nova_senha ?? req.body.novaSenha;
+
+  if (!senhaAtual || !novaSenha) {
+    return res.status(400).json({ erro: 'Informe a senha atual e a nova senha.' });
+  }
+  if (String(novaSenha).length < 4) {
+    return res.status(400).json({ erro: 'A nova senha deve ter no mínimo 4 caracteres.' });
+  }
+
+  const resultado = await authService.alterarSenha(req.usuario.id, { senhaAtual, novaSenha });
+  return res.status(200).json(resultado);
+}
+
 module.exports = {
   registrar,
   login,
   perfil,
+  alterarSenha,
 };

@@ -1,58 +1,27 @@
-import { useEffect, useState } from 'react';
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Container,
-  Divider,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
-} from '@mui/material';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import LocalLibraryIcon from '@mui/icons-material/LocalLibrary';
-import SchoolIcon from '@mui/icons-material/School';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useState } from 'react';
+import { Alert, Box, Button, Paper, TextField, Typography } from '@mui/material';
+import { apiRequest, setToken } from '../services/api';
 
-export default function LoginPage() {
-  const { usuario, login } = useAuth();
-  const navigate = useNavigate();
-
+export default function LoginPage({ onLogin }) {
   const [perfil, setPerfil] = useState('estudante');
   const [matricula, setMatricula] = useState('');
   const [senha, setSenha] = useState('');
-  const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
 
-  useEffect(() => {
-    if (usuario) {
-      navigate(usuario.role === 'bibliotecario' ? '/painel' : '/aluno', { replace: true });
-    }
-  }, [usuario, navigate]);
-
-  function handleTrocarPerfil(_, novoPerfil) {
-    if (novoPerfil) {
-      setPerfil(novoPerfil);
-      setErro('');
-    }
-  }
-
-  async function handleSubmit(event) {
+  async function handleEntrar(event) {
     event.preventDefault();
     setErro('');
-    setCarregando(true);
 
     try {
-      const dadosUsuario = await login(matricula.trim(), senha, perfil);
-      navigate(dadosUsuario.role === 'bibliotecario' ? '/painel' : '/aluno', { replace: true });
+      const dados = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: { matricula: matricula.trim(), senha, perfil },
+      });
+
+      setToken(dados.token);
+      onLogin(dados.usuario);
     } catch (err) {
-      setErro(err.message || 'Falha na autenticação. Verifique matrícula e senha.');
-    } finally {
-      setCarregando(false);
+      setErro(err.message);
     }
   }
 
@@ -63,94 +32,65 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: 'background.default',
         p: 2,
       }}
     >
-      <Container maxWidth="xs">
-        <Card elevation={3}>
-          <CardContent sx={{ p: 4 }}>
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <LocalLibraryIcon color="primary" sx={{ fontSize: 48, mb: 1 }} />
-              <Typography variant="h5" fontWeight={700}>
-                Biblioteca HM
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                EEB Humberto Machado — Itapiranga/SC
-              </Typography>
-            </Box>
+      <Paper variant="outlined" sx={{ p: 3, width: '100%', maxWidth: 360 }}>
+        <Box sx={{ textAlign: 'center', mb: 2 }}>
+          <img src="/capa.jpeg" alt="Logo HM" style={{ width: 72, height: 72, objectFit: 'contain' }} />
+          <Typography variant="h6">BiblioHM</Typography>
+        </Box>
 
-            <ToggleButtonGroup
-              value={perfil}
-              exclusive
-              fullWidth
-              color="primary"
-              onChange={handleTrocarPerfil}
-              sx={{ mb: 2.5 }}
-            >
-              <ToggleButton value="estudante" sx={{ gap: 1 }}>
-                <SchoolIcon fontSize="small" />
-                Estudante
-              </ToggleButton>
-              <ToggleButton value="administrador" sx={{ gap: 1 }}>
-                <AdminPanelSettingsIcon fontSize="small" />
-                Administrador
-              </ToggleButton>
-            </ToggleButtonGroup>
+        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+          <Button
+            fullWidth
+            size="small"
+            variant={perfil === 'estudante' ? 'contained' : 'outlined'}
+            onClick={() => setPerfil('estudante')}
+          >
+            Estudante
+          </Button>
+          <Button
+            fullWidth
+            size="small"
+            variant={perfil === 'administrador' ? 'contained' : 'outlined'}
+            onClick={() => setPerfil('administrador')}
+          >
+            Administrador
+          </Button>
+        </Box>
 
-            {erro && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {erro}
-              </Alert>
-            )}
+        {erro && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {erro}
+          </Alert>
+        )}
 
-            <Box
-              component="form"
-              onSubmit={handleSubmit}
-              sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
-            >
-              <TextField
-                label="Matrícula"
-                type="text"
-                required
-                fullWidth
-                autoFocus
-                value={matricula}
-                onChange={(e) => setMatricula(e.target.value)}
-                placeholder={perfil === 'administrador' ? 'Ex.: admin' : 'Ex.: 2026001'}
-              />
-              <TextField
-                label="Senha"
-                type="password"
-                required
-                fullWidth
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                fullWidth
-                disabled={carregando}
-              >
-                {carregando
-                  ? 'Entrando...'
-                  : `Entrar como ${perfil === 'administrador' ? 'Administrador' : 'Estudante'}`}
-              </Button>
-            </Box>
-
-            <Divider sx={{ my: 2.5 }} />
-            <Typography variant="caption" color="text.secondary" display="block">
-              <strong>Acesso de teste (após yarn seed:reset):</strong>
-              <br />
-              Administrador: matrícula <code>admin</code> / senha <code>admin</code>
-              <br />
-              Estudante: matrícula <code>2026001</code> / senha <code>2026001</code>
-            </Typography>
-          </CardContent>
-        </Card>
-      </Container>
+        <form onSubmit={handleEntrar}>
+          <TextField
+            label="Matrícula"
+            size="small"
+            fullWidth
+            required
+            value={matricula}
+            onChange={(e) => setMatricula(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            label="Senha"
+            type="password"
+            size="small"
+            fullWidth
+            required
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <Button type="submit" variant="contained" fullWidth>
+            Entrar
+          </Button>
+        </form>
+      </Paper>
     </Box>
   );
 }

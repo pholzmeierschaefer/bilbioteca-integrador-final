@@ -20,8 +20,22 @@ router.get(
 // RF11: Portal do aluno — livros em posse, histórico e reservas ativas (aluno e bibliotecario)
 router.get('/meus', autenticar, emprestimosController.listarMeusEmprestimos);
 
+// RF11: Caixa de Mensagens / Avisos — justificativas de atraso enviadas pelos estudantes
+router.get(
+  '/justificativas',
+  autenticar,
+  autorizar('bibliotecario'),
+  emprestimosController.listarJustificativas
+);
+router.put(
+  '/justificativas/:id/analisar',
+  autenticar,
+  autorizar('bibliotecario'),
+  emprestimosController.marcarJustificativaAnalisada
+);
+
 // RF06: Devolução rápida no balcão informando { exemplar_tombo } no body (apenas bibliotecario)
-router.patch(
+router.put(
   '/devolver',
   autenticar,
   autorizar('bibliotecario'),
@@ -53,7 +67,7 @@ router.delete(
 );
 
 // RF06: Registrar devolução por ID do empréstimo ou por exemplar_tombo no parâmetro (apenas bibliotecario)
-router.patch(
+router.put(
   '/:id/devolver',
   autenticar,
   autorizar('bibliotecario'),
@@ -61,7 +75,7 @@ router.patch(
 );
 
 // RF07: Registrar renovação (+7 dias corridos) (apenas bibliotecario)
-router.patch(
+router.put(
   '/:id/renovar',
   autenticar,
   autorizar('bibliotecario'),
@@ -69,7 +83,7 @@ router.patch(
 );
 
 // RF11: Enviar justificativa de atraso (aluno dono do empréstimo ou bibliotecario)
-router.patch(
+router.put(
   '/:id/justificativa',
   autenticar,
   emprestimosController.enviarJustificativaAtraso

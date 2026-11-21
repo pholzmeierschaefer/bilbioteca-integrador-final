@@ -14,12 +14,6 @@ const router = express.Router();
 router.get('/exemplares/:tombo', autenticar, livrosController.buscarExemplarPorTombo);
 
 // Edição de status/tombo e exclusão de exemplar (apenas bibliotecario)
-router.patch(
-  '/exemplares/:tombo',
-  autenticar,
-  autorizar('bibliotecario'),
-  livrosController.editarExemplar
-);
 router.put(
   '/exemplares/:tombo',
   autenticar,

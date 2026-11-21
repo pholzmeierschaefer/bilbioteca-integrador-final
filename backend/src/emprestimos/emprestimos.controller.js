@@ -190,6 +190,29 @@ async function excluirEmprestimo(req, res, next) {
   }
 }
 
+async function listarJustificativas(req, res, next) {
+  try {
+    const lista = await emprestimosService.listarJustificativas();
+    return res.status(200).json(lista);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function marcarJustificativaAnalisada(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ erro: 'ID de justificativa inválido.' });
+    }
+
+    const resultado = await emprestimosService.marcarJustificativaAnalisada(id);
+    return res.status(200).json(resultado);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   listarEmprestimos,
   buscarEmprestimoPorId,
@@ -201,4 +224,6 @@ module.exports = {
   obterDashboard,
   listarMeusEmprestimos,
   enviarJustificativaAtraso,
+  listarJustificativas,
+  marcarJustificativaAnalisada,
 };

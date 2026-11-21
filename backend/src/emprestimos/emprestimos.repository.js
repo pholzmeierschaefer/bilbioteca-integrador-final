@@ -211,6 +211,40 @@ async function criarJustificativa(dados, transaction) {
   return Justificativa.create(dados, { transaction });
 }
 
+async function listarJustificativas() {
+  return Justificativa.findAll({
+    include: [
+      {
+        model: Estudante,
+        as: 'estudante',
+        attributes: ['id', 'matricula', 'nome_completo', 'turma', 'telefone'],
+      },
+      {
+        model: Emprestimo,
+        as: 'emprestimo',
+        attributes: ['id', 'data_devolucao_prevista', 'data_devolucao_realizada', 'status'],
+        include: [
+          {
+            model: Exemplar,
+            as: 'exemplar',
+            attributes: ['id', 'codigo_exemplar'],
+            include: [{ model: Obra, as: 'obra', attributes: ['id', 'codigo_livro', 'titulo'] }],
+          },
+        ],
+      },
+    ],
+    order: [['data_envio', 'DESC']],
+  });
+}
+
+async function buscarJustificativaPorId(id) {
+  return Justificativa.findByPk(id);
+}
+
+async function atualizarJustificativa(justificativa, dados) {
+  return justificativa.update(dados);
+}
+
 async function excluirEmprestimoComJustificativas(emprestimoId, transaction) {
   await Justificativa.destroy({ where: { emprestimo_id: emprestimoId }, transaction });
   return Emprestimo.destroy({ where: { id: emprestimoId }, transaction });
@@ -306,6 +340,9 @@ module.exports = {
   atualizarExemplar,
   atualizarEstudante,
   criarJustificativa,
+  listarJustificativas,
+  buscarJustificativaPorId,
+  atualizarJustificativa,
   excluirEmprestimoComJustificativas,
   sincronizarAtrasos,
   listarEmprestimosAtivosCompletos,

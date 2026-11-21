@@ -40,11 +40,19 @@ async function buscarUsuarioPorMatricula(matricula) {
   });
 }
 
+async function buscarUsuarioPorId(id) {
+  return db.Usuario.findByPk(id);
+}
+
 async function buscarUsuarioPorIdSemSenha(id) {
   return db.Usuario.findByPk(id, {
     attributes: { exclude: ['senha'] },
     include: [{ model: db.Estudante, as: 'estudante' }],
   });
+}
+
+async function atualizarSenhaUsuario(usuario, senhaHash) {
+  return usuario.update({ senha: senhaHash });
 }
 
 async function contarUsuariosPorRole(role) {
@@ -70,7 +78,9 @@ function executarTransacao(callback) {
 module.exports = {
   buscarUsuarioPorEmail,
   buscarUsuarioPorMatricula,
+  buscarUsuarioPorId,
   buscarUsuarioPorIdSemSenha,
+  atualizarSenhaUsuario,
   contarUsuariosPorRole,
   criarUsuario,
   buscarEstudantePorMatricula,

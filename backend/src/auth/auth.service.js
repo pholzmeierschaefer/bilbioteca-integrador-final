@@ -183,8 +183,26 @@ async function obterPerfil(usuarioId) {
   return usuario;
 }
 
+async function alterarSenha(usuarioId, { senhaAtual, novaSenha }) {
+  const usuario = await authRepository.buscarUsuarioPorId(usuarioId);
+  if (!usuario) {
+    throw criarErroHttp(404, 'Usuário não encontrado.', 'USUARIO_NAO_ENCONTRADO');
+  }
+
+  const senhaAtualValida = await bcrypt.compare(String(senhaAtual), usuario.senha);
+  if (!senhaAtualValida) {
+    throw criarErroHttp(401, 'Senha atual incorreta.', 'SENHA_ATUAL_INVALIDA');
+  }
+
+  const novaHash = await bcrypt.hash(String(novaSenha), SALT_ROUNDS);
+  await authRepository.atualizarSenhaUsuario(usuario, novaHash);
+
+  return { mensagem: 'Senha alterada com sucesso.' };
+}
+
 module.exports = {
   registrar,
   login,
   obterPerfil,
+  alterarSenha,
 };

@@ -9,7 +9,8 @@ const router = express.Router();
 router.post('/registrar', asyncHandler(authController.registrar));
 router.post('/login', asyncHandler(authController.login));
 
-// Rota protegida para consultar o perfil do usuário autenticado via JWT
+// Rotas protegidas do usuário autenticado via JWT
 router.get('/perfil', autenticar, asyncHandler(authController.perfil));
+router.put('/senha', autenticar, asyncHandler(authController.alterarSenha));
 
 module.exports = router;

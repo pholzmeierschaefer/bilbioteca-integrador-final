@@ -1,127 +1,163 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
-  Chip,
-  Container,
-  Grid2,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Paper,
-  Tab,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
-  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
-import RateReviewIcon from '@mui/icons-material/RateReview';
-import CancelIcon from '@mui/icons-material/Cancel';
-import BarraTopo from '../components/BarraTopo';
-import ModalJustificativa from '../components/ModalJustificativa';
+import ModalMudarSenha from '../components/ModalMudarSenha';
 import { apiRequest, formatarData } from '../services/api';
 
-const STATUS_RESERVA_LABEL = {
-  pendente: { label: 'Na fila (Pendente)', color: 'info' },
-  aguardando_retirada: { label: 'Disponível p/ Retirada!', color: 'success' },
-  atendida: { label: 'Atendida', color: 'default' },
-  cancelada: { label: 'Cancelada', color: 'default' },
-};
-
-/**
- * RF08, RF10, RF11 e RNF-05: Portal responsivo do Estudante.
- */
-export default function PortalAluno() {
-  const [aba, setAba] = useState(0);
-  const [dadosPortal, setDadosPortal] = useState(null);
+export default function PortalAluno({ usuario, onSair }) {
+  const [tela, setTela] = useState('emprestimos');
+  const [portal, setPortal] = useState(null);
   const [obras, setObras] = useState([]);
-  const [buscaAcervo, setBuscaAcervo] = useState('');
+  const [busca, setBusca] = useState('');
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
-  const [emprestimoParaJustificar, setEmprestimoParaJustificar] = useState(null);
+  const [modalSenha, setModalSenha] = useState(false);
 
-  const carregarPortal = useCallback(async () => {
+  // Modal de justificativa
+  const [empJustificar, setEmpJustificar] = useState(null);
+  const [textoJustificativa, setTextoJustificativa] = useState('');
+
+  async function carregarPortal() {
     try {
       const dados = await apiRequest('/api/emprestimos/meus');
-      setDadosPortal(dados);
+      setPortal(dados);
     } catch (err) {
       setErro(err.message);
     }
-  }, []);
+  }
 
-  const carregarAcervo = useCallback(async (termo = '') => {
+  async function carregarObras(termo = '') {
     try {
-      const query = termo.trim() ? `?q=${encodeURIComponent(termo.trim())}` : '';
-      const lista = await apiRequest(`/api/livros${query}`);
+      const qs = termo ? `?q=${encodeURIComponent(termo)}` : '';
+      const lista = await apiRequest(`/api/livros${qs}`);
       setObras(lista);
     } catch (err) {
       setErro(err.message);
     }
-  }, []);
+  }
 
   useEffect(() => {
     carregarPortal();
-    carregarAcervo();
-  }, [carregarPortal, carregarAcervo]);
+    carregarObras();
+  }, []);
 
-  async function handleReservarObra(codigoObra) {
+  async function handleReservar(codigoObra) {
     setErro('');
     setSucesso('');
     try {
-      const reserva = await apiRequest('/api/reservas', {
+      await apiRequest('/api/reservas', {
         method: 'POST',
         body: { obra_codigo: codigoObra },
       });
-      setSucesso(
-        `Reserva registrada para "${reserva.obra?.titulo}" (posição na fila: ${reserva.posicao_fila || 1}).`
-      );
-      await carregarPortal();
+      setSucesso('Reserva registrada com sucesso!');
+      carregarPortal();
     } catch (err) {
       setErro(err.message);
     }
   }
 
-  async function handleCancelarReserva(reservaId) {
+  async function handleCancelarReserva(id) {
     setErro('');
     setSucesso('');
     try {
-      await apiRequest(`/api/reservas/${reservaId}/cancelar`, { method: 'PATCH' });
-      setSucesso('Reserva cancelada com sucesso.');
-      await carregarPortal();
+      await apiRequest(`/api/reservas/${id}/cancelar`, { method: 'PUT' });
+      setSucesso('Reserva cancelada.');
+      carregarPortal();
     } catch (err) {
       setErro(err.message);
     }
   }
 
-  async function handleEnviarJustificativa(emprestimoId, texto) {
+  async function handleEnviarJustificativa(event) {
+    event.preventDefault();
     setErro('');
     setSucesso('');
-    await apiRequest(`/api/emprestimos/${emprestimoId}/justificativa`, {
-      method: 'PATCH',
-      body: { justificativa_atraso: texto },
-    });
-    setSucesso('Justificativa enviada à bibliotecária com sucesso.');
-    await carregarPortal();
+    try {
+      await apiRequest(`/api/emprestimos/${empJustificar.id}/justificativa`, {
+        method: 'PUT',
+        body: { justificativa_atraso: textoJustificativa },
+      });
+      setSucesso('Justificativa enviada com sucesso!');
+      setEmpJustificar(null);
+      setTextoJustificativa('');
+      carregarPortal();
+    } catch (err) {
+      setErro(err.message);
+    }
   }
 
-  const estudante = dadosPortal?.estudante;
-  const emPosse = dadosPortal?.em_posse || [];
-  const historico = dadosPortal?.historico || [];
-  const reservas = dadosPortal?.reservas || [];
-  const reservasProntas = reservas.filter((r) => r.status === 'aguardando_retirada');
+  const emPosse = portal?.em_posse || [];
+  const historico = portal?.historico || [];
+  const reservas = portal?.reservas || [];
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', pb: 6 }}>
-      <BarraTopo subtitulo="Portal do Estudante" />
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      {/* Menu lateral simples */}
+      <Box
+        sx={{
+          width: 220,
+          bgcolor: '#ffffff',
+          borderRight: '1px solid #e5e7eb',
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+        }}
+      >
+        <Box sx={{ mb: 3 }}>
+          <img src="/capa.jpeg" alt="Logo HM" style={{ width: 80, height: 80, objectFit: 'contain' }} />
+          <Typography variant="h6">BiblioHM</Typography>
+        </Box>
 
-      <Container maxWidth="lg" sx={{ mt: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexGrow: 1 }}>
+          {[
+            { id: 'emprestimos', nome: 'Meus Empréstimos' },
+            { id: 'acervo', nome: 'Acervo de Livros' },
+            { id: 'reservas', nome: 'Minhas Reservas' },
+          ].map((item) => (
+            <Button
+              key={item.id}
+              onClick={() => setTela(item.id)}
+              sx={{
+                textTransform: 'none',
+                bgcolor: tela === item.id ? '#ffdab9' : 'transparent',
+                color: tela === item.id ? '#3e2723' : '#1f2937',
+                fontWeight: tela === item.id ? 'bold' : 'normal',
+              }}
+            >
+              {item.nome}
+            </Button>
+          ))}
+        </Box>
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 2 }}>
+          <Typography variant="caption">{usuario.nome}</Typography>
+          <Button size="small" variant="outlined" onClick={() => setModalSenha(true)}>
+            Mudar Senha
+          </Button>
+          <Button size="small" variant="contained" color="error" onClick={onSair}>
+            Sair
+          </Button>
+        </Box>
+      </Box>
+
+      {/* Conteúdo */}
+      <Box sx={{ flex: 1, p: 4, overflowX: 'auto' }}>
         {erro && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErro('')}>
             {erro}
@@ -133,337 +169,212 @@ export default function PortalAluno() {
           </Alert>
         )}
 
-        {/* Alerta RN-05 quando exemplar reservado foi devolvido e aguarda retirada */}
-        {reservasProntas.map((res) => (
-          <Alert severity="info" key={res.id} sx={{ mb: 2 }}>
-            <strong>Livro disponível para retirada!</strong> A obra{' '}
-            <strong>{res.obra?.titulo}</strong> (Tombo: {res.exemplar?.codigo_tombo || 'retido'})
-            está retida prioritariamente para você no balcão da biblioteca.
-          </Alert>
-        ))}
+        {tela === 'emprestimos' && (
+          <Box>
+            <Typography variant="h5" sx={{ mb: 2 }}>
+              Meus Empréstimos
+            </Typography>
 
-        {/* Cabeçalho com situação do leitor */}
-        {estudante && (
-          <Paper variant="outlined" sx={{ p: 2, mb: 2.5 }}>
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 1.5,
-              }}
-            >
-              <Box>
-                <Typography variant="h6" fontWeight={600}>
-                  {estudante.nome}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Matrícula: {estudante.matricula} • Turma: {estudante.turma}
-                </Typography>
-              </Box>
-              <Chip
-                label={
-                  estudante.status === 'ativo'
-                    ? 'Situação: Ativo'
-                    : estudante.status === 'bloqueado'
-                      ? 'Situação: Bloqueado (Devolva livros em atraso)'
-                      : 'Situação: Inativo'
-                }
-                color={estudante.status === 'ativo' ? 'success' : 'error'}
-              />
-            </Box>
-          </Paper>
-        )}
-
-        <Paper sx={{ mb: 2.5 }}>
-          <Tabs
-            value={aba}
-            onChange={(_, novaAba) => setAba(novaAba)}
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            <Tab label={`Meus Empréstimos (${emPosse.length})`} />
-            <Tab label="Consultar Acervo" />
-            <Tab label={`Minhas Reservas (${reservas.length})`} />
-          </Tabs>
-        </Paper>
-
-        {/* ABA 0: MEUS EMPRÉSTIMOS E HISTÓRICO (RF11) */}
-        {aba === 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Box>
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
-                Livros em Posse ({emPosse.length}/2)
-              </Typography>
-              {emPosse.length === 0 ? (
-                <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
-                  <Typography color="text.secondary">
-                    Você não possui livros emprestados no momento.
-                  </Typography>
-                </Paper>
-              ) : (
-                <Grid2 container spacing={2}>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+              Em posse ({emPosse.length}/2)
+            </Typography>
+            <Paper variant="outlined" sx={{ mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Livro</TableCell>
+                    <TableCell>Tombo</TableCell>
+                    <TableCell>Devolução Prevista</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Ação</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {emPosse.map((emp) => (
-                    <Grid2 size={{ xs: 12, md: 6 }} key={emp.id}>
-                      <Card
-                        variant="outlined"
-                        sx={{
-                          borderColor: emp.critico
-                            ? 'error.main'
-                            : emp.atrasado
-                              ? 'warning.main'
-                              : 'divider',
-                        }}
-                      >
-                        <CardContent>
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'flex-start',
-                              gap: 1,
-                              mb: 1,
-                            }}
-                          >
-                            <Typography variant="subtitle1" fontWeight={600}>
-                              {emp.exemplar?.obra?.titulo || 'Obra'}
-                            </Typography>
-                            <Chip
-                              size="small"
-                              label={
-                                emp.atrasado
-                                  ? `Atrasado (${emp.dias_atraso}d)`
-                                  : 'No prazo'
-                              }
-                              color={emp.critico ? 'error' : emp.atrasado ? 'warning' : 'success'}
-                            />
-                          </Box>
-
-                          <Typography variant="body2" color="text.secondary">
-                            Autor: {emp.exemplar?.obra?.autor || '—'} • Tombo:{' '}
-                            {emp.exemplar?.codigo_tombo || '—'}
-                          </Typography>
-                          <Typography variant="body2" sx={{ mt: 1 }}>
-                            Retirado em: <strong>{formatarData(emp.data_emprestimo)}</strong> •
-                            Devolução prevista:{' '}
-                            <strong>{formatarData(emp.data_devolucao_prevista)}</strong>
-                          </Typography>
-
-                          {emp.justificativa_atraso && (
-                            <Alert severity="info" sx={{ mt: 1.5, py: 0.5 }}>
-                              <strong>Justificativa enviada:</strong> {emp.justificativa_atraso}
-                            </Alert>
-                          )}
-
-                          <Box sx={{ mt: 2 }}>
-                            <Button
-                              size="small"
-                              variant={emp.atrasado ? 'contained' : 'outlined'}
-                              color={emp.atrasado ? 'warning' : 'primary'}
-                              startIcon={<RateReviewIcon />}
-                              onClick={() => setEmprestimoParaJustificar(emp)}
-                            >
-                              Enviar Justificativa de Atraso
-                            </Button>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </Grid2>
+                    <TableRow key={emp.id}>
+                      <TableCell>{emp.exemplar?.obra?.titulo}</TableCell>
+                      <TableCell>{emp.exemplar?.codigo_tombo}</TableCell>
+                      <TableCell>{formatarData(emp.data_devolucao_prevista)}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color={emp.atrasado ? 'error' : 'success.main'}>
+                          {emp.atrasado ? `Atrasado (${emp.dias_atraso}d)` : 'No prazo'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setEmpJustificar(emp);
+                            setTextoJustificativa('');
+                          }}
+                        >
+                          Justificar Atraso
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </Grid2>
-              )}
-            </Box>
+                  {emPosse.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5}>Nenhum livro em posse.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Paper>
 
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
-                Histórico de Leituras ({historico.length})
-              </Typography>
-              {historico.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhuma devolução registrada ainda.
-                </Typography>
-              ) : (
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Obra</TableCell>
-                        <TableCell>Tombo</TableCell>
-                        <TableCell>Retirada</TableCell>
-                        <TableCell>Devolução</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {historico.map((emp) => (
-                        <TableRow key={emp.id}>
-                          <TableCell>{emp.exemplar?.obra?.titulo || '—'}</TableCell>
-                          <TableCell>{emp.exemplar?.codigo_tombo || '—'}</TableCell>
-                          <TableCell>{formatarData(emp.data_emprestimo)}</TableCell>
-                          <TableCell>{formatarData(emp.data_devolucao_realizada)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+              Histórico ({historico.length})
+            </Typography>
+            <Paper variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Livro</TableCell>
+                    <TableCell>Retirada</TableCell>
+                    <TableCell>Devolução</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {historico.map((emp) => (
+                    <TableRow key={emp.id}>
+                      <TableCell>{emp.exemplar?.obra?.titulo}</TableCell>
+                      <TableCell>{formatarData(emp.data_emprestimo)}</TableCell>
+                      <TableCell>{formatarData(emp.data_devolucao_realizada)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {historico.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3}>Sem histórico de devoluções.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </Paper>
           </Box>
         )}
 
-        {/* ABA 1: CONSULTAR ACERVO E RESERVAR (RF10 e RF08) */}
-        {aba === 1 && (
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Box
-              component="form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                carregarAcervo(buscaAcervo);
+        {tela === 'acervo' && (
+          <Box>
+            <Typography variant="h5" sx={{ mb: 2 }}>
+              Acervo de Livros
+            </Typography>
+            <TextField
+              size="small"
+              placeholder="Pesquisar título, código ou autor..."
+              value={busca}
+              onChange={(e) => {
+                setBusca(e.target.value);
+                carregarObras(e.target.value);
               }}
-              sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}
-            >
-              <TextField
-                size="small"
-                label="Buscar por título, autor ou código"
-                value={buscaAcervo}
-                onChange={(e) => setBuscaAcervo(e.target.value)}
-                sx={{ flexGrow: 1, minWidth: 240 }}
-              />
-              <Button type="submit" variant="contained" startIcon={<SearchIcon />}>
-                Buscar
-              </Button>
-            </Box>
-
-            <TableContainer>
+              sx={{ mb: 2, width: 320, bgcolor: '#ffffff' }}
+            />
+            <Paper variant="outlined">
               <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Código</TableCell>
-                    <TableCell>Título / Autor</TableCell>
-                    <TableCell>Tipo / Categoria</TableCell>
-                    <TableCell align="center">Disponíveis / Ativos</TableCell>
-                    <TableCell align="right">Reserva</TableCell>
+                    <TableCell>Título</TableCell>
+                    <TableCell>Autor</TableCell>
+                    <TableCell>Disponíveis / Total</TableCell>
+                    <TableCell>Ação</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {obras.map((obra) => (
                     <TableRow key={obra.id}>
                       <TableCell>{obra.codigo}</TableCell>
+                      <TableCell>{obra.titulo}</TableCell>
+                      <TableCell>{obra.autor}</TableCell>
                       <TableCell>
-                        <Typography variant="body2" fontWeight={600}>
-                          {obra.titulo}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {obra.autor} — {obra.editora || 'Sem editora'}
-                        </Typography>
+                        {obra.exemplares_disponiveis} / {obra.total_exemplares_ativos}
                       </TableCell>
                       <TableCell>
-                        {obra.tipo || '—'} / {obra.categoria || '—'}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Chip
-                          size="small"
-                          label={`${obra.exemplares_disponiveis} / ${obra.total_exemplares_ativos}`}
-                          color={obra.exemplares_disponiveis > 0 ? 'success' : 'warning'}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<BookmarkAddIcon />}
-                          onClick={() => handleReservarObra(obra.codigo)}
-                        >
+                        <Button size="small" onClick={() => handleReservar(obra.codigo)}>
                           Reservar
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {obras.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        Nenhuma obra encontrada.
+                </TableBody>
+              </Table>
+            </Paper>
+          </Box>
+        )}
+
+        {tela === 'reservas' && (
+          <Box>
+            <Typography variant="h5" sx={{ mb: 2 }}>
+              Minhas Reservas
+            </Typography>
+            <Paper variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Livro</TableCell>
+                    <TableCell>Data</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Ação</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {reservas.map((res) => (
+                    <TableRow key={res.id}>
+                      <TableCell>{res.obra?.titulo}</TableCell>
+                      <TableCell>{formatarData(res.data_reserva)}</TableCell>
+                      <TableCell>{res.status}</TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          color="error"
+                          onClick={() => handleCancelarReserva(res.id)}
+                        >
+                          Cancelar
+                        </Button>
                       </TableCell>
+                    </TableRow>
+                  ))}
+                  {reservas.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4}>Nenhuma reserva ativa.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-            </TableContainer>
-          </Paper>
+            </Paper>
+          </Box>
         )}
+      </Box>
 
-        {/* ABA 2: MINHAS RESERVAS (RF08) */}
-        {aba === 2 && (
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
-              Minhas Reservas Ativas ({reservas.length})
-            </Typography>
-            {reservas.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                Você não possui reservas ativas na fila.
-              </Typography>
-            ) : (
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Obra</TableCell>
-                      <TableCell>Data da Reserva</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell align="right">Ação</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {reservas.map((res) => {
-                      const info = STATUS_RESERVA_LABEL[res.status] || {
-                        label: res.status,
-                        color: 'default',
-                      };
-                      return (
-                        <TableRow key={res.id}>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight={600}>
-                              {res.obra?.titulo || '—'}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              Código: {res.obra?.codigo || '—'}
-                              {res.exemplar?.codigo_tombo
-                                ? ` • Tombo retido: ${res.exemplar.codigo_tombo}`
-                                : ''}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>{formatarData(res.data_reserva)}</TableCell>
-                          <TableCell>
-                            <Chip size="small" label={info.label} color={info.color} />
-                          </TableCell>
-                          <TableCell align="right">
-                            <Button
-                              size="small"
-                              color="error"
-                              startIcon={<CancelIcon />}
-                              onClick={() => handleCancelarReserva(res.id)}
-                            >
-                              Cancelar
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </Paper>
-        )}
-      </Container>
+      {/* Modal Justificativa */}
+      <Dialog open={Boolean(empJustificar)} onClose={() => setEmpJustificar(null)} fullWidth maxWidth="sm">
+        <form onSubmit={handleEnviarJustificativa}>
+          <DialogTitle>Enviar Justificativa de Atraso</DialogTitle>
+          <DialogContent>
+            <TextField
+              label="Motivo do atraso"
+              multiline
+              rows={3}
+              fullWidth
+              required
+              value={textoJustificativa}
+              onChange={(e) => setTextoJustificativa(e.target.value)}
+              sx={{ mt: 1 }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEmpJustificar(null)}>Cancelar</Button>
+            <Button type="submit" variant="contained">
+              Enviar
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
 
-      <ModalJustificativa
-        aberto={Boolean(emprestimoParaJustificar)}
-        emprestimo={emprestimoParaJustificar}
-        onFechar={() => setEmprestimoParaJustificar(null)}
-        onEnviar={handleEnviarJustificativa}
+      <ModalMudarSenha
+        aberto={modalSenha}
+        onFechar={() => setModalSenha(false)}
+        onSucesso={setSucesso}
       />
     </Box>
   );
 }
-

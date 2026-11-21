@@ -22,7 +22,7 @@ router.post('/', autenticar, reservasController.criarReserva);
 router.put('/:id', autenticar, autorizar('bibliotecario'), reservasController.editarReserva);
 
 // Cancelar reserva (liberando ou repassando exemplar retido se aplicável)
-router.patch('/:id/cancelar', autenticar, reservasController.cancelarReserva);
+router.put('/:id/cancelar', autenticar, reservasController.cancelarReserva);
 
 // Excluir reserva por ID
 router.delete('/:id', autenticar, reservasController.excluirReserva);

@@ -35,7 +35,7 @@ router.get('/:matricula', autenticar, estudantesController.buscarPorMatricula);
 
 // Edição de dados e status administrativo do estudante (apenas bibliotecario)
 router.put('/:matricula', autenticar, autorizar('bibliotecario'), estudantesController.editarEstudante);
-router.patch(
+router.put(
   '/:matricula/status',
   autenticar,
   autorizar('bibliotecario'),

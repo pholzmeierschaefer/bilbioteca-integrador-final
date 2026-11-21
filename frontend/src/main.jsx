@@ -1,36 +1,30 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
-import { AuthProvider } from './contexts/AuthContext';
 import App from './App';
 
-const temaBiblioteca = createTheme({
+const tema = createTheme({
   palette: {
-    primary: {
-      main: '#1565c0',
-    },
-    secondary: {
-      main: '#2e7d32',
-    },
-    background: {
-      default: '#f4f6f8',
-    },
+    primary: { main: '#ffdab9', dark: '#f4c095', contrastText: '#3e2723' },
+    secondary: { main: '#8d6e63', contrastText: '#ffffff' },
+    error: { main: '#d32f2f' },
+    background: { default: '#fffaf5' },
   },
-  shape: {
-    borderRadius: 8,
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        outlinedPrimary: { color: '#5d4037', borderColor: '#e0b08a' },
+        textPrimary: { color: '#5d4037' },
+      },
+    },
   },
 });
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ThemeProvider theme={temaBiblioteca}>
+    <ThemeProvider theme={tema}>
       <CssBaseline />
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
+      <App />
     </ThemeProvider>
   </StrictMode>
 );
