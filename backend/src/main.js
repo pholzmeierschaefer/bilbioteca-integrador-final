@@ -15,6 +15,14 @@ const app = express();
 // 1. Middlewares globais (sempre registrados ANTES das rotas)
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+// Express 5 deixa req.body como undefined quando não há corpo JSON; garante {} para retornar 400 em vez de 500
+app.use((req, _res, next) => {
+  if (req.body === undefined && !req.is('text/csv') && !req.is('text/plain')) {
+    req.body = {};
+  }
+  next();
+});
 
 // 2. Rota simples de verificação de status da API
 app.get('/', (req, res) => {

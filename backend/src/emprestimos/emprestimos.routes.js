@@ -29,14 +29,28 @@ router.patch(
 );
 
 // =====================================================================
-// OPERAÇÕES DE BALCÃO E PORTAL (/api/emprestimos)
+// CRUD COMPLETO E OPERAÇÕES DE BALCÃO (/api/emprestimos)
 // =====================================================================
 
-// Listagem geral de empréstimos com filtros (apenas bibliotecario)
+// Listar empréstimos com filtros (apenas bibliotecario)
 router.get('/', autenticar, autorizar('bibliotecario'), emprestimosController.listarEmprestimos);
+
+// Buscar empréstimo por ID (bibliotecario vê qualquer um; aluno vê apenas o próprio)
+router.get('/:id', autenticar, emprestimosController.buscarEmprestimoPorId);
 
 // RF05: Registrar empréstimo no balcão (apenas bibliotecario)
 router.post('/', autenticar, autorizar('bibliotecario'), emprestimosController.registrarEmprestimo);
+
+// Editar empréstimo por ID (apenas bibliotecario)
+router.put('/:id', autenticar, autorizar('bibliotecario'), emprestimosController.editarEmprestimo);
+
+// Excluir empréstimo por ID (apenas bibliotecario)
+router.delete(
+  '/:id',
+  autenticar,
+  autorizar('bibliotecario'),
+  emprestimosController.excluirEmprestimo
+);
 
 // RF06: Registrar devolução por ID do empréstimo ou por exemplar_tombo no parâmetro (apenas bibliotecario)
 router.patch(

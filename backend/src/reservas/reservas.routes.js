@@ -1,21 +1,30 @@
 const express = require('express');
 const reservasController = require('./reservas.controller');
 const autenticar = require('../middlewares/autenticar');
+const autorizar = require('../middlewares/autorizar');
 
 const router = express.Router();
 
 // =====================================================================
-// ROTAS DE RESERVAS (/api/reservas) — RF08 e RN-05
-// Acessíveis para aluno e bibliotecario (com escopo RBAC no service)
+// CRUD COMPLETO DE RESERVAS (/api/reservas) — RF08 e RN-05
 // =====================================================================
 
-// Lista fila de reservas ordenada por ordem de chegada (FIFO)
+// Listar fila de reservas ordenada por ordem de chegada (FIFO)
 router.get('/', autenticar, reservasController.listarReservas);
 
-// Coloca estudante na fila de espera de uma obra (status inicial 'pendente')
+// Buscar reserva por ID
+router.get('/:id', autenticar, reservasController.buscarReservaPorId);
+
+// Criar reserva na fila de espera (status inicial 'pendente')
 router.post('/', autenticar, reservasController.criarReserva);
 
-// Cancela uma reserva (liberando ou repassando exemplar retido se aplicável)
+// Atualizar status/alerta da reserva (apenas bibliotecario)
+router.put('/:id', autenticar, autorizar('bibliotecario'), reservasController.editarReserva);
+
+// Cancelar reserva (liberando ou repassando exemplar retido se aplicável)
 router.patch('/:id/cancelar', autenticar, reservasController.cancelarReserva);
+
+// Excluir reserva por ID
+router.delete('/:id', autenticar, reservasController.excluirReserva);
 
 module.exports = router;

@@ -25,29 +25,29 @@ function formatarReserva(reserva, posicaoFila = null) {
     ...(posicaoFila !== null ? { posicao_fila: posicaoFila } : {}),
     estudante: reserva.estudante
       ? {
-          id: reserva.estudante.id,
-          matricula: reserva.estudante.matricula,
-          nome: reserva.estudante.nome_completo,
-          turma: reserva.estudante.turma,
-          telefone: reserva.estudante.telefone,
-          status: reserva.estudante.status,
-        }
+        id: reserva.estudante.id,
+        matricula: reserva.estudante.matricula,
+        nome: reserva.estudante.nome_completo,
+        turma: reserva.estudante.turma,
+        telefone: reserva.estudante.telefone,
+        status: reserva.estudante.status,
+      }
       : null,
     obra: reserva.obra
       ? {
-          id: reserva.obra.id,
-          codigo: reserva.obra.codigo_livro,
-          titulo: reserva.obra.titulo,
-          autor: reserva.obra.autor,
-          editora: reserva.obra.editora,
-        }
+        id: reserva.obra.id,
+        codigo: reserva.obra.codigo_livro,
+        titulo: reserva.obra.titulo,
+        autor: reserva.obra.autor,
+        editora: reserva.obra.editora,
+      }
       : null,
     exemplar: reserva.exemplar
       ? {
-          id: reserva.exemplar.id,
-          codigo_tombo: reserva.exemplar.codigo_exemplar,
-          status: STATUS_EXEMPLAR_DB_PARA_API[reserva.exemplar.status] || reserva.exemplar.status,
-        }
+        id: reserva.exemplar.id,
+        codigo_tombo: reserva.exemplar.codigo_exemplar,
+        status: STATUS_EXEMPLAR_DB_PARA_API[reserva.exemplar.status] || reserva.exemplar.status,
+      }
       : null,
     created_at: reserva.created_at,
     updated_at: reserva.updated_at,
@@ -304,10 +304,120 @@ async function cancelarReserva(reservaId, usuarioAutenticado) {
     reserva: formatarReserva(resultado.reservaCancelada),
     ...(resultado.proximaReservaAcionada
       ? {
-          proxima_reserva_notificada: formatarReserva(resultado.proximaReservaAcionada),
-        }
+        proxima_reserva_notificada: formatarReserva(resultado.proximaReservaAcionada),
+      }
       : {}),
   };
+}
+
+/**
+ * Busca uma reserva específica por ID (bibliotecário vê qualquer uma; aluno vê apenas a própria).
+ */
+async function buscarReservaPorId(reservaId, usuarioAutenticado) {
+  const reserva = await reservasRepository.buscarReservaPorId(reservaId);
+  if (!reserva) {
+    throw criarErroHttp(404, 'Reserva não encontrada.', 'RESERVA_NAO_ENCONTRADA');
+  }
+
+  if (
+    usuarioAutenticado.role === 'aluno' &&
+    Number(reserva.estudante_id) !== Number(usuarioAutenticado.estudante_id)
+  ) {
+    throw criarErroHttp(
+      403,
+      'Permissão insuficiente. Você só pode consultar suas próprias reservas.',
+      'ACESSO_NEGADO'
+    );
+  }
+
+  return formatarReserva(reserva);
+}
+
+/**
+ * Atualiza campos simples de uma reserva (status ou alerta_enviado) — restrito ao bibliotecário.
+ */
+async function editarReserva(reservaId, dados) {
+  const reserva = await reservasRepository.buscarReservaPorId(reservaId);
+  if (!reserva) {
+    throw criarErroHttp(404, 'Reserva não encontrada.', 'RESERVA_NAO_ENCONTRADA');
+  }
+
+  const campos = {};
+  if (dados.status !== undefined) {
+    const novoStatus = String(dados.status).trim().toLowerCase();
+    if (!STATUS_RESERVA_VALIDOS.includes(novoStatus)) {
+      throw criarErroHttp(
+        400,
+        `Status inválido. Valores permitidos: ${STATUS_RESERVA_VALIDOS.join(', ')}.`,
+        'STATUS_INVALIDO'
+      );
+    }
+    campos.status = novoStatus;
+  }
+
+  if (dados.alerta_enviado !== undefined) {
+    campos.alerta_enviado = Boolean(dados.alerta_enviado);
+  }
+
+  if (Object.keys(campos).length === 0) {
+    return formatarReserva(reserva);
+  }
+
+  await reservasRepository.atualizarReserva(reserva, campos);
+  const atualizada = await reservasRepository.buscarReservaPorId(reserva.id);
+  return formatarReserva(atualizada);
+}
+
+/**
+ * Exclui uma reserva por ID. Se havia exemplar retido para ela, repassa ao próximo da fila ou libera.
+ */
+async function excluirReserva(reservaId, usuarioAutenticado) {
+  await reservasRepository.executarTransacao(async (transaction) => {
+    const reserva = await reservasRepository.buscarReservaPorId(reservaId, transaction);
+    if (!reserva) {
+      throw criarErroHttp(404, 'Reserva não encontrada.', 'RESERVA_NAO_ENCONTRADA');
+    }
+
+    if (
+      usuarioAutenticado.role === 'aluno' &&
+      Number(reserva.estudante_id) !== Number(usuarioAutenticado.estudante_id)
+    ) {
+      throw criarErroHttp(
+        403,
+        'Permissão insuficiente. Você só pode excluir suas próprias reservas.',
+        'ACESSO_NEGADO'
+      );
+    }
+
+    // Se a reserva retinha um exemplar físico, repassa ao próximo da fila ou volta para disponível
+    if (reserva.status === 'aguardando_retirada' && reserva.exemplar_id) {
+      const exemplar = await reservasRepository.buscarExemplarPorId(
+        reserva.exemplar_id,
+        transaction
+      );
+      if (exemplar && exemplar.status === 'reservado') {
+        const proxima = await reservasRepository.buscarProximaReservaPendente(
+          reserva.obra_id,
+          transaction
+        );
+        if (proxima && proxima.id !== reserva.id) {
+          await reservasRepository.atualizarReserva(
+            proxima,
+            { status: 'aguardando_retirada', exemplar_id: exemplar.id, alerta_enviado: true },
+            transaction
+          );
+        } else {
+          await reservasRepository.atualizarExemplar(
+            exemplar,
+            { status: 'disponivel' },
+            transaction
+          );
+        }
+      }
+    }
+
+    await reservasRepository.excluirReserva(reserva, transaction);
+  });
 }
 
 module.exports = {
@@ -315,5 +425,8 @@ module.exports = {
   formatarReserva,
   criarReserva,
   listarReservas,
+  buscarReservaPorId,
+  editarReserva,
   cancelarReserva,
+  excluirReserva,
 };

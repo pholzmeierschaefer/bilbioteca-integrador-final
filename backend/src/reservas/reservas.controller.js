@@ -52,6 +52,40 @@ async function criarReserva(req, res, next) {
   }
 }
 
+async function buscarReservaPorId(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ erro: 'ID de reserva inválido.' });
+    }
+
+    const reserva = await reservasService.buscarReservaPorId(id, req.usuario);
+    return res.status(200).json(reserva);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function editarReserva(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ erro: 'ID de reserva inválido.' });
+    }
+
+    if (req.body.status === undefined && req.body.alerta_enviado === undefined) {
+      return res.status(400).json({
+        erro: 'Informe ao menos um campo para atualizar (status ou alerta_enviado).',
+      });
+    }
+
+    const reserva = await reservasService.editarReserva(id, req.body);
+    return res.status(200).json(reserva);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function cancelarReserva(req, res, next) {
   try {
     const id = Number(req.params.id);
@@ -66,8 +100,25 @@ async function cancelarReserva(req, res, next) {
   }
 }
 
+async function excluirReserva(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ erro: 'ID de reserva inválido.' });
+    }
+
+    await reservasService.excluirReserva(id, req.usuario);
+    return res.status(204).send();
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   listarReservas,
+  buscarReservaPorId,
   criarReserva,
+  editarReserva,
   cancelarReserva,
+  excluirReserva,
 };

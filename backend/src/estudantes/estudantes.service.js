@@ -186,11 +186,23 @@ async function listarEstudantes(filtros = {}) {
 }
 
 /**
- * Busca estudante por matrícula.
+ * Localiza um estudante aceitando tanto matrícula quanto ID numérico.
+ */
+async function localizarEstudantePorMatriculaOuId(identificador, transaction) {
+  const valor = String(identificador).trim();
+  let estudante = await estudantesRepository.buscarEstudantePorMatricula(valor, transaction);
+  if (!estudante && /^\d+$/.test(valor)) {
+    estudante = await estudantesRepository.buscarEstudantePorId(Number(valor), transaction);
+  }
+  return estudante;
+}
+
+/**
+ * Busca estudante por matrícula ou ID.
  * RBAC: bibliotecário consulta qualquer leitor; aluno só pode consultar a própria matrícula.
  */
 async function buscarPorMatricula(matricula, usuarioAutenticado) {
-  const matriculaLimpa = String(matricula).trim();
+  const identificador = String(matricula).trim();
 
   if (usuarioAutenticado && usuarioAutenticado.role === 'aluno') {
     let proprioEstudante = null;
@@ -201,7 +213,12 @@ async function buscarPorMatricula(matricula, usuarioAutenticado) {
     }
 
     const matriculaDoToken = usuarioAutenticado.matricula || proprioEstudante?.matricula;
-    if (!matriculaDoToken || matriculaDoToken.toLowerCase() !== matriculaLimpa.toLowerCase()) {
+    const correspondeMatricula =
+      matriculaDoToken && matriculaDoToken.toLowerCase() === identificador.toLowerCase();
+    const correspondeId =
+      proprioEstudante && /^\d+$/.test(identificador) && Number(identificador) === proprioEstudante.id;
+
+    if (!correspondeMatricula && !correspondeId) {
       throw criarErroHttp(
         403,
         'Permissão insuficiente. Você só pode consultar os seus próprios dados.',
@@ -214,7 +231,7 @@ async function buscarPorMatricula(matricula, usuarioAutenticado) {
     }
   }
 
-  const estudante = await estudantesRepository.buscarEstudantePorMatricula(matriculaLimpa);
+  const estudante = await localizarEstudantePorMatriculaOuId(identificador);
   if (!estudante) {
     throw criarErroHttp(404, 'Estudante não encontrado.', 'ESTUDANTE_NAO_ENCONTRADO');
   }
@@ -304,7 +321,7 @@ async function cadastrarEstudante(dados) {
  * Edita os dados de um estudante e mantém o usuário associado sincronizado.
  */
 async function editarEstudante(matriculaParam, dados) {
-  const estudante = await estudantesRepository.buscarEstudantePorMatricula(matriculaParam);
+  const estudante = await localizarEstudantePorMatriculaOuId(matriculaParam);
   if (!estudante) {
     throw criarErroHttp(404, 'Estudante não encontrado.', 'ESTUDANTE_NAO_ENCONTRADO');
   }
@@ -435,7 +452,7 @@ async function alterarStatusEstudante(matriculaParam, novoStatus) {
  * Inativa o estudante (soft-delete), preservando o histórico de empréstimos e reservas.
  */
 async function inativarEstudante(matriculaParam) {
-  const estudante = await estudantesRepository.buscarEstudantePorMatricula(matriculaParam);
+  const estudante = await localizarEstudantePorMatriculaOuId(matriculaParam);
   if (!estudante) {
     throw criarErroHttp(404, 'Estudante não encontrado.', 'ESTUDANTE_NAO_ENCONTRADO');
   }

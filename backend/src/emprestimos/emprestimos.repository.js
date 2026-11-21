@@ -211,6 +211,11 @@ async function criarJustificativa(dados, transaction) {
   return Justificativa.create(dados, { transaction });
 }
 
+async function excluirEmprestimoComJustificativas(emprestimoId, transaction) {
+  await Justificativa.destroy({ where: { emprestimo_id: emprestimoId }, transaction });
+  return Emprestimo.destroy({ where: { id: emprestimoId }, transaction });
+}
+
 /**
  * Sincroniza empréstimos vencidos (status -> 'atrasado') e bloqueia automaticamente
  * estudantes 'ativo' com títulos vencidos (RN-03 / RF09).
@@ -301,6 +306,7 @@ module.exports = {
   atualizarExemplar,
   atualizarEstudante,
   criarJustificativa,
+  excluirEmprestimoComJustificativas,
   sincronizarAtrasos,
   listarEmprestimosAtivosCompletos,
   contarReservasPorStatus,

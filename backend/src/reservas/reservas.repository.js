@@ -227,6 +227,10 @@ async function atualizarReserva(reserva, dados, transaction) {
   return reserva.update(dados, { transaction });
 }
 
+async function excluirReserva(reserva, transaction) {
+  return reserva.destroy({ transaction });
+}
+
 async function buscarExemplarPorId(exemplarId, transaction) {
   return Exemplar.findByPk(exemplarId, { transaction });
 }
@@ -253,6 +257,7 @@ module.exports = {
   buscarReservaAguardandoRetirada,
   contarReservasPendentesDaObra,
   atualizarReserva,
+  excluirReserva,
   buscarExemplarPorId,
   atualizarExemplar,
   executarTransacao,

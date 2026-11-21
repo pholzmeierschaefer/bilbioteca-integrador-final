@@ -148,9 +148,54 @@ async function enviarJustificativaAtraso(req, res, next) {
   }
 }
 
+async function buscarEmprestimoPorId(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ erro: 'ID de empréstimo inválido.' });
+    }
+
+    const emprestimo = await emprestimosService.buscarEmprestimoPorId(id, req.usuario);
+    return res.status(200).json(emprestimo);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function editarEmprestimo(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ erro: 'ID de empréstimo inválido.' });
+    }
+
+    const emprestimo = await emprestimosService.editarEmprestimo(id, req.body);
+    return res.status(200).json(emprestimo);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function excluirEmprestimo(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ erro: 'ID de empréstimo inválido.' });
+    }
+
+    await emprestimosService.excluirEmprestimo(id);
+    return res.status(204).send();
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   listarEmprestimos,
+  buscarEmprestimoPorId,
   registrarEmprestimo,
+  editarEmprestimo,
+  excluirEmprestimo,
   registrarDevolucao,
   registrarRenovacao,
   obterDashboard,

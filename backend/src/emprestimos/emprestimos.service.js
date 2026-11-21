@@ -53,11 +53,11 @@ function formatarEmprestimo(emprestimo, referencia = new Date()) {
 
   const justificativas = Array.isArray(emprestimo.justificativas)
     ? emprestimo.justificativas.map((j) => ({
-        id: j.id,
-        texto_descritivo: j.texto_descritivo,
-        data_envio: j.data_envio,
-        status: j.status,
-      }))
+      id: j.id,
+      texto_descritivo: j.texto_descritivo,
+      data_envio: j.data_envio,
+      status: j.status,
+    }))
     : [];
 
   return {
@@ -74,30 +74,30 @@ function formatarEmprestimo(emprestimo, referencia = new Date()) {
     critico,
     estudante: emprestimo.estudante
       ? {
-          id: emprestimo.estudante.id,
-          matricula: emprestimo.estudante.matricula,
-          nome: emprestimo.estudante.nome_completo,
-          turma: emprestimo.estudante.turma,
-          telefone: emprestimo.estudante.telefone,
-          status: emprestimo.estudante.status,
-        }
+        id: emprestimo.estudante.id,
+        matricula: emprestimo.estudante.matricula,
+        nome: emprestimo.estudante.nome_completo,
+        turma: emprestimo.estudante.turma,
+        telefone: emprestimo.estudante.telefone,
+        status: emprestimo.estudante.status,
+      }
       : null,
     exemplar: emprestimo.exemplar
       ? {
-          id: emprestimo.exemplar.id,
-          codigo_tombo: emprestimo.exemplar.codigo_exemplar,
-          status:
-            STATUS_EXEMPLAR_DB_PARA_API[emprestimo.exemplar.status] || emprestimo.exemplar.status,
-          obra: emprestimo.exemplar.obra
-            ? {
-                id: emprestimo.exemplar.obra.id,
-                codigo: emprestimo.exemplar.obra.codigo_livro,
-                titulo: emprestimo.exemplar.obra.titulo,
-                autor: emprestimo.exemplar.obra.autor,
-                editora: emprestimo.exemplar.obra.editora,
-              }
-            : null,
-        }
+        id: emprestimo.exemplar.id,
+        codigo_tombo: emprestimo.exemplar.codigo_exemplar,
+        status:
+          STATUS_EXEMPLAR_DB_PARA_API[emprestimo.exemplar.status] || emprestimo.exemplar.status,
+        obra: emprestimo.exemplar.obra
+          ? {
+            id: emprestimo.exemplar.obra.id,
+            codigo: emprestimo.exemplar.obra.codigo_livro,
+            titulo: emprestimo.exemplar.obra.titulo,
+            autor: emprestimo.exemplar.obra.autor,
+            editora: emprestimo.exemplar.obra.editora,
+          }
+          : null,
+      }
       : null,
     justificativa_atraso: justificativas.length > 0 ? justificativas[0].texto_descritivo : null,
     justificativas,
@@ -656,6 +656,123 @@ async function enviarJustificativaAtraso(emprestimoId, textoJustificativa, usuar
   };
 }
 
+async function buscarEmprestimoPorId(emprestimoId, usuarioAutenticado) {
+  const emprestimo = await emprestimosRepository.buscarEmprestimoPorId(emprestimoId);
+  if (!emprestimo) {
+    throw criarErroHttp(404, 'Empréstimo não encontrado.', 'EMPRESTIMO_NAO_ENCONTRADO');
+  }
+
+  if (
+    usuarioAutenticado &&
+    usuarioAutenticado.role === 'aluno' &&
+    Number(emprestimo.estudante_id) !== Number(usuarioAutenticado.estudante_id)
+  ) {
+    throw criarErroHttp(
+      403,
+      'Permissão insuficiente. Você só pode consultar seus próprios empréstimos.',
+      'ACESSO_NEGADO'
+    );
+  }
+
+  return formatarEmprestimo(emprestimo);
+}
+
+/**
+ * Edita campos administrativos de um empréstimo (data prevista, devolução, renovações ou status).
+ */
+async function editarEmprestimo(emprestimoId, dados) {
+  const statusValidos = ['ativo', 'devolvido', 'atrasado'];
+
+  const atualizado = await emprestimosRepository.executarTransacao(async (transaction) => {
+    const emprestimo = await emprestimosRepository.buscarEmprestimoPorId(emprestimoId, transaction);
+    if (!emprestimo) {
+      throw criarErroHttp(404, 'Empréstimo não encontrado.', 'EMPRESTIMO_NAO_ENCONTRADO');
+    }
+
+    const campos = {};
+
+    const novaPrevista = dados.data_devolucao_prevista ?? dados.data_prevista;
+    if (novaPrevista !== undefined) {
+      const data = new Date(novaPrevista);
+      if (Number.isNaN(data.getTime())) {
+        throw criarErroHttp(400, 'Data de devolução prevista inválida.', 'DATA_INVALIDA');
+      }
+      campos.data_devolucao_prevista = data;
+    }
+
+    const novaDevolucao = dados.data_devolucao_realizada ?? dados.data_devolucao;
+    if (novaDevolucao !== undefined) {
+      if (novaDevolucao === null || novaDevolucao === '') {
+        campos.data_devolucao_realizada = null;
+      } else {
+        const data = new Date(novaDevolucao);
+        if (Number.isNaN(data.getTime())) {
+          throw criarErroHttp(400, 'Data de devolução realizada inválida.', 'DATA_INVALIDA');
+        }
+        campos.data_devolucao_realizada = data;
+      }
+    }
+
+    if (dados.renovacoes !== undefined) {
+      const renov = Number(dados.renovacoes);
+      if (!Number.isInteger(renov) || renov < 0) {
+        throw criarErroHttp(
+          400,
+          'O número de renovações deve ser um inteiro >= 0.',
+          'RENOVACOES_INVALIDAS'
+        );
+      }
+      campos.renovacoes = renov;
+    }
+
+    if (dados.status !== undefined) {
+      const statusLimpo = String(dados.status).trim().toLowerCase();
+      if (!statusValidos.includes(statusLimpo)) {
+        throw criarErroHttp(
+          400,
+          `Status inválido. Valores permitidos: ${statusValidos.join(', ')}.`,
+          'STATUS_INVALIDO'
+        );
+      }
+      campos.status = statusLimpo;
+    }
+
+    if (Object.keys(campos).length > 0) {
+      await emprestimosRepository.atualizarEmprestimo(emprestimo, campos, transaction);
+    }
+
+    return emprestimosRepository.buscarEmprestimoPorId(emprestimo.id, transaction);
+  });
+
+  return formatarEmprestimo(atualizado);
+}
+
+/**
+ * Exclui um empréstimo por ID. Se ainda estava em aberto, devolve o exemplar para 'disponivel'.
+ */
+async function excluirEmprestimo(emprestimoId) {
+  await emprestimosRepository.executarTransacao(async (transaction) => {
+    const emprestimo = await emprestimosRepository.buscarEmprestimoPorId(emprestimoId, transaction);
+    if (!emprestimo) {
+      throw criarErroHttp(404, 'Empréstimo não encontrado.', 'EMPRESTIMO_NAO_ENCONTRADO');
+    }
+
+    if (
+      emprestimo.data_devolucao_realizada === null &&
+      emprestimo.exemplar &&
+      emprestimo.exemplar.status === 'emprestado'
+    ) {
+      await emprestimosRepository.atualizarExemplar(
+        emprestimo.exemplar,
+        { status: 'disponivel' },
+        transaction
+      );
+    }
+
+    await emprestimosRepository.excluirEmprestimoComJustificativas(emprestimo.id, transaction);
+  });
+}
+
 module.exports = {
   PRAZO_PADRAO_DIAS,
   LIMITE_EMPRESTIMOS_SIMULTANEOS,
@@ -664,6 +781,9 @@ module.exports = {
   registrarDevolucao,
   registrarRenovacao,
   listarEmprestimos,
+  buscarEmprestimoPorId,
+  editarEmprestimo,
+  excluirEmprestimo,
   obterDashboard,
   listarMeusEmprestimos,
   enviarJustificativaAtraso,
